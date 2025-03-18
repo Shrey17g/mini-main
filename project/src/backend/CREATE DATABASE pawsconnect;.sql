@@ -27,6 +27,8 @@ CREATE TABLE lost_found_pets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ye prooceed
+
 DROP TABLE IF EXISTS products;
 
 CREATE TABLE products (
@@ -38,6 +40,14 @@ CREATE TABLE products (
     status ENUM('active', 'deleted') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+// Remove these tables:
+DROP TABLE IF EXISTS post_likes;
+DROP TABLE IF EXISTS community_posts;
+DROP TABLE IF EXISTS post_comments;
+DROP TABLE IF EXISTS post_categories;
+DROP TABLE IF EXISTS user_activity;
+DROP TABLE IF EXISTS reported_content;
 
 -- Clear the table first
 TRUNCATE TABLE admin_users;
