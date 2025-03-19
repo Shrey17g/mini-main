@@ -38,7 +38,8 @@ CREATE TABLE products (
     description TEXT,
     image_url MEDIUMBLOB,
     status ENUM('active', 'deleted') DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    quantity INT DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE community_posts (

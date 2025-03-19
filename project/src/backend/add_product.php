@@ -21,6 +21,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name = $_POST['name'];
     $price = floatval($_POST['price']);
     $description = $_POST['description'];
+    $quantity = intval($_POST['quantity']); // Ensure quantity is properly parsed
     $image = null;
 
     if (isset($_FILES['image'])) {
@@ -70,9 +71,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // If no exact duplicate, create new product
-    $sql = "INSERT INTO products (name, price, description, image_url) VALUES (?, ?, ?, ?)";
+    $sql = "INSERT INTO products (name, price, description, image_url, quantity) VALUES (?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sdss", $name, $price, $description, $image);
+    $stmt->bind_param("sdssi", $name, $price, $description, $image, $quantity);
     
     if($stmt->execute()) {
         echo json_encode([

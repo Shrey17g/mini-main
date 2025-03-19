@@ -11,6 +11,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name = $_POST['name'];
     $price = floatval($_POST['price']);
     $description = $_POST['description'];
+    $quantity = intval($_POST['quantity']); // Add quantity handling
     
     // First deactivate any existing products with same name (except current one)
     $deactivateQuery = "UPDATE products SET status = 'deleted' WHERE name = ? AND id != ?";
@@ -23,14 +24,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_FILES['image']) && $_FILES['image']['size'] > 0) {
         // Update with new image
         $image = file_get_contents($_FILES['image']['tmp_name']);
-        $sql = "UPDATE products SET name = ?, price = ?, description = ?, image_url = ?, status = 'active' WHERE id = ?";
+        $sql = "UPDATE products SET name = ?, price = ?, description = ?, image_url = ?, quantity = ?, status = 'active' WHERE id = ?";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sdssi", $name, $price, $description, $image, $id);
+        $stmt->bind_param("sdssii", $name, $price, $description, $image, $quantity, $id);
     } else {
         // Keep existing image
-        $sql = "UPDATE products SET name = ?, price = ?, description = ?, status = 'active' WHERE id = ?";
+        $sql = "UPDATE products SET name = ?, price = ?, description = ?, quantity = ?, status = 'active' WHERE id = ?";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sdsi", $name, $price, $description, $id);
+        $stmt->bind_param("sdsii", $name, $price, $description, $quantity, $id);
     }
     
     if($stmt->execute()) {
