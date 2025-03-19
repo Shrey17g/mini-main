@@ -73,17 +73,17 @@ CREATE TABLE post_comments (
     FOREIGN KEY (user_id) REFERENCES admin_users(id)
 );
 
-DROP TABLE IF EXISTS post_likes;
-DROP TABLE IF EXISTS community_posts;
+-- DROP TABLE IF EXISTS post_likes;
+-- DROP TABLE IF EXISTS community_posts;
 
-// Remove these tables:
-DROP TABLE IF EXISTS post_comments;
-DROP TABLE IF EXISTS post_categories;
-DROP TABLE IF EXISTS user_activity;
-DROP TABLE IF EXISTS reported_content;
+-- // Remove these tables:
+-- DROP TABLE IF EXISTS post_comments;
+-- DROP TABLE IF EXISTS post_categories;
+-- DROP TABLE IF EXISTS user_activity;
+-- DROP TABLE IF EXISTS reported_content;
 
--- Clear the table first
-TRUNCATE TABLE admin_users;
+-- -- Clear the table first
+-- TRUNCATE TABLE admin_users;
 
 -- Insert admin with the hash you copied
 INSERT INTO admin_users (email, password) VALUES 
