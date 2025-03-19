@@ -41,9 +41,41 @@ CREATE TABLE products (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-// Remove these tables:
+CREATE TABLE community_posts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    image_url MEDIUMBLOB,
+    status ENUM('active', 'deleted') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES admin_users(id)
+);
+
+CREATE TABLE post_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    user_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES community_posts(id),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id),
+    UNIQUE KEY unique_like (post_id, user_id)
+);
+
+CREATE TABLE post_comments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    status ENUM('active', 'deleted') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES community_posts(id),
+    FOREIGN KEY (user_id) REFERENCES admin_users(id)
+);
+
 DROP TABLE IF EXISTS post_likes;
 DROP TABLE IF EXISTS community_posts;
+
+// Remove these tables:
 DROP TABLE IF EXISTS post_comments;
 DROP TABLE IF EXISTS post_categories;
 DROP TABLE IF EXISTS user_activity;
