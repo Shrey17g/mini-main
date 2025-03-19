@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Heart, MessageCircle, Share2, X, Camera, Trash2, Image, Send } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Heart, MessageCircle, Share2, X, Camera, Trash2, Image, Send, Plus } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 
@@ -84,78 +84,177 @@ export default function Community() {
   const commentInputRef = useRef<HTMLInputElement>(null);
   const userType = localStorage.getItem('userType');
   const isAdmin = userType === 'admin';
+  const userId = localStorage.getItem('adminId'); // Will work for admin ID too
 
-  const handleDeletePost = (postId: number) => {
-    if (window.confirm('Are you sure you want to delete this post?')) {
-      setPosts(posts.filter(post => post.id !== postId));
-      setPostComments(prev => {
-        const newComments = { ...prev };
-        delete newComments[postId];
-        return newComments;
-      });
-    }
-  };
-
-  const handleDeleteComment = (postId: number, commentId: number) => {
-    if (window.confirm('Are you sure you want to delete this comment?')) {
-      setPostComments(prev => ({
-        ...prev,
-        [postId]: prev[postId].filter(comment => comment.id !== commentId)
-      }));
-      setPosts(posts.map(post => {
-        if (post.id === postId) {
-          return { ...post, comments: post.comments - 1 };
+  const fetchPosts = async () => {
+    try {
+      const response = await fetch(`http://localhost/mini%20main/project/src/backend/get_posts.php?user_id=${userId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
-        return post;
-      }));
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        setPosts(data.posts);
+      }
+    } catch (err) {
+      console.error('Error fetching posts:', err);
+      // Keep showing initial posts on error
+      setPosts(initialPosts);
     }
   };
 
-  const handleSubmitComment = (e: React.FormEvent) => {
+  const handleDeletePost = async (postId: number) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) return;
+    
+    try {
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/delete_post.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: postId })
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Refresh posts after deletion
+        fetchPosts();
+      }
+    } catch (err) {
+      console.error('Error deleting post:', err);
+    }
+  };
+
+  const fetchComments = async (postId: number) => {
+    try {
+      const response = await fetch(`http://localhost/mini%20main/project/src/backend/get_comments.php?postId=${postId}`);
+      const data = await response.json();
+      if (data.success) {
+        setPostComments(prev => ({
+          ...prev,
+          [postId]: data.comments
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    }
+    // Check if we have an active post and fetch its comments
+    if (activePost) {
+      fetchComments(activePost.id);
+    }
+  };
+
+  const handleDeleteComment = async (postId: number, commentId: number) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/delete_comment.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: commentId })
+      });
+      const data = await response.json();
+      if (data.success) {
+        // Fetch both comments and posts to update comment count
+        await Promise.all([
+          fetchComments(postId),
+          fetchPosts()
+        ]);
+      }
+    } catch (err) {
+      console.error('Error deleting comment:', err);
+    }
+  };
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !activePost) return;
-
-    const newCommentObj: Comment = {
-      id: Date.now(),
-      author: isAdmin ? 'Admin' : userType === 'center' ? 'Adoption Center' : 'Pet Parent',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80',
-      content: newComment,
-      timestamp: 'Just now'
-    };
-
-    setPostComments(prev => ({
-      ...prev,
-      [activePost.id]: [newCommentObj, ...(prev[activePost.id] || [])]
-    }));
-
-    setPosts(posts.map(post => {
-      if (post.id === activePost.id) {
-        return { ...post, comments: post.comments + 1 };
+  
+    try {
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/add_comment.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          post_id: activePost.id,
+          user_id: userId,
+          content: newComment
+        })
+      });
+  
+      const data = await response.json();
+      if (data.success) {
+        // Fetch both comments and posts to update comment count
+        await Promise.all([
+          fetchComments(activePost.id),
+          fetchPosts()
+        ]);
+        setNewComment('');
       }
-      return post;
-    }));
-
-    setNewComment('');
-  };
-
-  const handleLike = (postId: number) => {
-    if (!isAdmin) {
-      setPosts(posts.map(post => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            likes: post.isLiked ? post.likes - 1 : post.likes + 1,
-            isLiked: !post.isLiked
-          };
-        }
-        return post;
-      }));
+    } catch (err) {
+      console.error('Error adding comment:', err);
     }
   };
 
-  const handleComment = (post: Post) => {
+  const handleLike = async (postId: number) => {
+    // Optimistically update UI
+    setPosts(currentPosts => 
+      currentPosts.map(post => 
+        post.id === postId 
+          ? { 
+              ...post, 
+              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+              isLiked: !post.isLiked 
+            }
+          : post
+      )
+    );
+  
+    try {
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/toggle_like.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          post_id: postId,
+          user_id: userId
+        })
+      });
+  
+      const data = await response.json();
+      if (!data.success) {
+        // Revert changes if request failed
+        fetchPosts();
+      }
+    } catch (err) {
+      console.error('Error toggling like:', err);
+      // Revert changes on error
+      fetchPosts();
+    }
+  };
+
+  const handleComment = async (post: Post) => {
     setActivePost(post);
     setShowComments(true);
+    try {
+      const response = await fetch(`http://localhost/mini%20main/project/src/backend/get_comments.php?postId=${post.id}`);
+      const data = await response.json();
+      if (data.success) {
+        setPostComments(prev => ({
+          ...prev,
+          [post.id]: data.comments
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    }
     setTimeout(() => {
       commentInputRef.current?.focus();
     }, 100);
@@ -178,57 +277,71 @@ export default function Community() {
     }
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPost.content.trim()) return;
 
-    const newPostObj: Post = {
-      id: Date.now(),
-      author: userType === 'center' ? 'Adoption Center' : 'Pet Parent',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80',
-      content: newPost.content,
-      image: previewImage || '',
-      likes: 0,
-      comments: 0,
-      isLiked: false,
-      timestamp: 'Just now'
-    };
+    try {
+      const formData = new FormData();
+      formData.append('content', newPost.content);
+      formData.append('user_id', userId || '0');
+      
+      // Changed image handling
+      if (fileInputRef.current?.files?.[0]) {
+        formData.append('image', fileInputRef.current.files[0]);
+      }
 
-    setPosts([newPostObj, ...posts]);
-    setNewPost({ content: '', image: '' });
-    setPreviewImage(null);
-    setShowNewPostModal(false);
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/add_post.php', {
+        method: 'POST',
+        body: formData // Send as FormData instead of JSON
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        fetchPosts();
+        setNewPost({ content: '', image: '' });
+        setPreviewImage(null);
+        setShowNewPostModal(false);
+      }
+    } catch (err) {
+      console.error('Error creating post:', err);
+    }
   };
+
+  // Replace the existing useEffect with a simpler version
+  useEffect(() => {
+    fetchPosts();
+  }, []); // Only fetch once on mount
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Create Post Button */}
-        {!isAdmin && (
+        {/* Create Post Button - Fixed at top */}
+        <div className="sticky top-0 z-10 bg-gray-50 pb-4">
           <button
             onClick={() => setShowNewPostModal(true)}
-            className="w-full bg-white rounded-lg shadow-md p-4 mb-6 text-left text-gray-500 hover:bg-gray-50 transition duration-200"
+            className="w-full bg-white rounded-lg shadow-md p-6 text-left text-gray-500 hover:bg-gray-50 transition duration-200"
           >
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                <Camera size={20} />
+              <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                <Camera size={24} />
               </div>
-              <span>Share your pet story...</span>
+              <span className="text-lg">Share your pet story...</span>
             </div>
           </button>
-        )}
+        </div>
 
-        {/* Posts List */}
-        <div className="space-y-6">
+        {/* Scrollable Posts Container */}
+        <div className="space-y-8 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
           {posts.map((post) => (
             <div key={post.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <img src={post.avatar} alt={post.author} className="w-10 h-10 rounded-full" />
+              <div className="p-6">  {/* Increased padding */}
+                <div className="flex items-center justify-between mb-6">  {/* Increased margin */}
+                  <div className="flex items-center gap-4">  {/* Increased gap */}
+                    <img src={post.avatar} alt={post.author} className="w-12 h-12 rounded-full" /> {/* Larger avatar */}
                     <div>
-                      <h3 className="font-semibold">{post.author}</h3>
+                      <h3 className="text-lg font-semibold">{post.author}</h3>  {/* Larger text */}
                       <p className="text-sm text-gray-500">{post.timestamp}</p>
                     </div>
                   </div>
@@ -242,27 +355,24 @@ export default function Community() {
                     </button>
                   )}
                 </div>
-                <p className="mb-4">{post.content}</p>
+                <p className="mb-6 text-lg">{post.content}</p>  {/* Larger text and margin */}
                 {post.image && (
-                  <img src={post.image} alt="" className="w-full h-64 object-cover rounded-lg mb-4" />
+                  <img 
+                    src={post.image} 
+                    alt="" 
+                    className="w-full h-[500px] object-cover rounded-lg mb-6"
+                  />
                 )}
                 <div className="flex items-center gap-6 text-gray-600">
-                  {isAdmin ? (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Heart size={20} />
-                      <span>{post.likes} likes</span>
-                    </div>
-                  ) : (
-                    <button
-                      className={`flex items-center gap-2 hover:text-indigo-600 transition-colors ${
-                        post.isLiked ? 'text-indigo-600' : ''
-                      }`}
-                      onClick={() => handleLike(post.id)}
-                    >
-                      <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
-                      <span>{post.likes}</span>
-                    </button>
-                  )}
+                  <button
+                    className={`flex items-center gap-2 hover:text-indigo-600 transition-colors ${
+                      post.isLiked ? 'text-indigo-600' : ''
+                    }`}
+                    onClick={() => handleLike(post.id)}
+                  >
+                    <Heart size={20} fill={post.isLiked ? 'currentColor' : 'none'} />
+                    <span>{post.likes}</span>
+                  </button>
                   <button
                     className="flex items-center gap-2 hover:text-indigo-600 transition-colors"
                     onClick={() => handleComment(post)}
@@ -288,8 +398,9 @@ export default function Community() {
         {/* Create Post Modal */}
         {showNewPostModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg w-full max-w-2xl">
-              <div className="p-4 border-b flex justify-between items-center">
+            <div className="bg-white rounded-xl w-[500px] overflow-hidden">
+              {/* Header - Fixed */}
+              <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
                 <h3 className="text-xl font-semibold">Create Post</h3>
                 <button
                   onClick={() => {
@@ -302,54 +413,65 @@ export default function Community() {
                   <X size={24} />
                 </button>
               </div>
-              <form onSubmit={handleCreatePost} className="p-6">
-                <textarea
-                  value={newPost.content}
-                  onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-                  placeholder="Share your pet story..."
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent mb-4"
-                  rows={4}
-                  required
-                />
-                {previewImage && (
-                  <div className="relative mb-4">
-                    <img
-                      src={previewImage}
-                      alt="Preview"
-                      className="w-full h-64 object-cover rounded-lg"
+
+              {/* Wrap entire content in form */}
+              <form onSubmit={handleCreatePost}>
+                {/* Scrollable Container */}
+                <div className="h-[300px] overflow-y-auto overflow-x-hidden p-6">
+                  <div className="space-y-4">
+                    <textarea
+                      value={newPost.content}
+                      onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+                      placeholder="Share your pet story..."
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                        h-[150px] min-h-[150px] max-h-[150px] overflow-y-scroll resize-none scrollbar scrollbar-thumb-gray-400 scrollbar-track-gray-100"
+                      required
                     />
+                    {previewImage && (
+                      <div className="relative">
+                        <img
+                          src={previewImage}
+                          alt="Preview"
+                          className="w-full h-[200px] object-cover rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage(null)}
+                          className="absolute top-2 right-2 bg-gray-800 text-white p-1 rounded-full hover:bg-gray-700"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Controls - Fixed */}
+                <div className="p-4 border-t bg-white sticky bottom-0">
+                  <div className="flex gap-4">
                     <button
                       type="button"
-                      onClick={() => setPreviewImage(null)}
-                      className="absolute top-2 right-2 bg-gray-800 text-white p-1 rounded-full hover:bg-gray-700"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200"
                     >
-                      <X size={16} />
+                      <Image size={20} />
+                      Add Photo
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="submit"
+                      className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      <Send size={20} />
+                      Post
                     </button>
                   </div>
-                )}
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200"
-                  >
-                    <Image size={20} />
-                    Add Photo
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  <button
-                    type="submit"
-                    className="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition duration-200 flex items-center justify-center gap-2"
-                  >
-                    <Send size={20} />
-                    Post
-                  </button>
                 </div>
               </form>
             </div>
@@ -421,6 +543,12 @@ export default function Community() {
         )}
       </div>
       <Footer />
+      <button
+        onClick={() => setShowNewPostModal(true)}
+        className="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700"
+      >
+        <Plus size={24} />
+      </button>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, MapPin, Calendar, Upload, Trash2, X, Phone, Mail } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
+import { useNavigate } from 'react-router-dom';
 
 const initialReports = [
   {
@@ -41,7 +42,8 @@ export default function LostFound() {
   const [reports, setReports] = useState(initialReports);
   const [selectedReport, setSelectedReport] = useState<typeof initialReports[0] | null>(null);
   const userType = localStorage.getItem('userType');
-  const isAdmin = userType === 'admin';
+  const isAdmin = userType === 'admin';  // Restore admin check
+  const navigate = useNavigate();
 
   const handleReportClick = (type: string) => {
     setFormType(type);
@@ -105,16 +107,45 @@ export default function LostFound() {
           />
         </div>
 
-        <div>
-          <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-1">
-            Contact Information
-          </label>
-          <input
-            type="text"
-            id="contact"
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            placeholder="Enter your contact information"
-          />
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="contactName" className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Name
+            </label>
+            <input
+              type="text"
+              id="contactName"
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter your full name"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="contactPhone" className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Phone
+            </label>
+            <input
+              type="tel"
+              id="contactPhone"
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter your phone number"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Email
+            </label>
+            <input
+              type="email"
+              id="contactEmail"
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter your email address"
+              required
+            />
+          </div>
         </div>
 
         <div>
@@ -157,6 +188,58 @@ export default function LostFound() {
       </form>
     </div>
   );
+
+  interface Pet {
+    id: number;
+    type: string;
+    petName: string;
+    description: string;
+    location: string;
+    date: string;
+    image: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    lastSeenDetails: string;
+    additionalInfo: string;
+  }
+
+  const PetCard = ({ pet }: { pet: Pet }) => {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="relative">
+          <img src={pet.image} alt={pet.petName} className="w-full h-48 object-cover" />
+          {isAdmin && (
+            <button
+              onClick={() => handleDeleteReport(pet.id)}
+              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
+              title="Delete report"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+        <div className="p-4">
+          <h3 className="text-xl font-semibold mb-2">{pet.petName}</h3>
+          <p className="text-gray-600 mb-2">{pet.description}</p>
+          <div className="flex items-center gap-2 text-gray-600 mb-2">
+            <MapPin size={16} />
+            <span>{pet.location}</span>
+          </div>
+          <div className="flex items-center gap-2 text-gray-600 mb-4">
+            <Calendar size={16} />
+            <span>{pet.date}</span>
+          </div>
+          <button 
+            onClick={() => setSelectedReport(pet)}
+            className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition duration-200"
+          >
+            View Details
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -206,40 +289,7 @@ export default function LostFound() {
             {reports
               .filter((report) => report.type === activeTab)
               .map((report) => (
-                <div key={report.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                  <div className="relative">
-                    <img src={report.image} alt={report.petName} className="w-full h-48 object-cover" />
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleDeleteReport(report.id)}
-                        className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transition-colors"
-                        title="Delete report"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-xl font-semibold mb-2">{report.petName}</h3>
-                    <p className="text-gray-600 mb-2">{report.description}</p>
-                    <div className="flex items-center gap-2 text-gray-600 mb-2">
-                      <MapPin size={16} />
-                      <span>{report.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600 mb-4">
-                      <Calendar size={16} />
-                      <span>{report.date}</span>
-                    </div>
-                    {!isAdmin && (
-                      <button 
-                        onClick={() => setSelectedReport(report)}
-                        className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition duration-200"
-                      >
-                        View Details
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <PetCard key={report.id} pet={report} />
               ))}
           </div>
         </div>

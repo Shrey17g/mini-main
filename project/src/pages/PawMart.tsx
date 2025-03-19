@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, ArrowLeft, Minus, Plus, X, Edit, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navigation from '../components/Navigation';
@@ -10,39 +10,9 @@ interface Product {
   price: number;
   description: string;
   image: string;
-  quantity?: number;
+  quantity: number;
+  cartQuantity?: number;
 }
-
-const initialProducts: Product[] = [
-  {
-    id: 1,
-    name: 'Premium Dog Food',
-    price: 2499,
-    description: 'High-quality nutrition for your furry friend',
-    image: 'https://images.unsplash.com/photo-1589924691995-400dc9ecc119?auto=format&fit=crop&q=80'
-  },
-  {
-    id: 2,
-    name: 'Cat Scratching Post',
-    price: 3299,
-    description: 'Durable sisal rope scratching post with platforms',
-    image: 'https://images.unsplash.com/photo-1545249390-6bdfa286564f?auto=format&fit=crop&q=80'
-  },
-  {
-    id: 3,
-    name: 'Interactive Dog Toy',
-    price: 1199,
-    description: 'Keep your dog entertained for hours',
-    image: 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80'
-  },
-  {
-    id: 4,
-    name: 'Pet Grooming Kit',
-    price: 4199,
-    description: 'Complete grooming set for cats and dogs',
-    image: 'https://images.unsplash.com/photo-1626253838715-84a3613771ab?auto=format&fit=crop&q=80'
-  }
-];
 
 // Function to format price in Indian Rupees
 const formatPrice = (price: number) => {
@@ -54,13 +24,36 @@ const formatPrice = (price: number) => {
   }).format(price);
 };
 
-// Rest of the PawMart component code remains the same, just replace all instances of
-// ${product.price} with {formatPrice(product.price)}
-// ${item.price} with {formatPrice(item.price)}
-// ${cartTotal.toFixed(2)} with {formatPrice(cartTotal)}
+// Add this helper function near the top
+const validateImageUrl = (url: string) => {
+  try {
+    const imgUrl = new URL(url);
+    // Allow images from common image hosting sites
+    const allowedDomains = [
+      'images.unsplash.com',
+      'i.imgur.com',
+      'images.pexels.com',
+      'via.placeholder.com',
+      'placehold.co',
+      'static.wikia.nocookie.net',
+      'media.istockphoto.com'
+    ];
+    
+    // For Google Images, transform the URL if needed
+    if (url.includes('googleusercontent.com')) {
+      return url.split('=')[0]; // Get the base image URL without parameters
+    }
+    
+    return allowedDomains.some(domain => imgUrl.hostname.includes(domain)) 
+      ? url 
+      : 'https://placehold.co/400x300?text=Invalid+Image+URL';
+  } catch {
+    return 'https://placehold.co/400x300?text=Invalid+Image+URL';
+  }
+};
 
 export default function PawMart() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<Product[]>([]);
   const [quantities, setQuantities] = useState<{ [key: number]: number }>(
     products.reduce((acc, product) => ({ ...acc, [product.id]: 1 }), {})
@@ -76,8 +69,43 @@ export default function PawMart() {
     name: '',
     price: 0,
     description: '',
-    image: ''
+    image: '',
+    quantity: 0
   });
+
+  // Add state for form inputs
+  const [productPrice, setProductPrice] = useState<string>(''); // Change to string type
+
+  // Add new state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+
+  // Add refresh interval to fetch products periodically
+  useEffect(() => {
+    fetchProducts();
+  }, []); // Only fetch once on mount
+
+  // Update fetchProducts function
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/get_products.php');
+      if (!response.ok) throw new Error('Network response was not ok');
+      const data = await response.json();
+      
+      // Only update if there are changes
+      if (JSON.stringify(data) !== JSON.stringify(products)) {
+        setProducts(data.map((product: any) => ({
+          id: parseInt(product.id),
+          name: product.name,
+          price: parseFloat(product.price),
+          description: product.description,
+          image: product.image_url || 'https://placehold.co/400x300?text=No+Image',
+          quantity: parseInt(product.quantity)
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+    }
+  };
 
   const handleQuantityChange = (productId: number, delta: number) => {
     setQuantities(prev => ({
@@ -97,6 +125,10 @@ export default function PawMart() {
   };
 
   const handleAddToCart = (product: Product) => {
+    if (quantities[product.id] > product.quantity) {
+      alert('Cannot add more items than available in stock');
+      return;
+    }
     const quantity = quantities[product.id];
     const existingItem = cartItems.find(item => item.id === product.id);
 
@@ -123,38 +155,88 @@ export default function PawMart() {
     setCartItems(cartItems.filter(item => item.id !== productId));
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  // Modify handleAddProduct to prevent duplicates
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProduct) {
-      setProducts(products.map(p => 
-        p.id === editingProduct.id 
-          ? { ...newProduct, id: editingProduct.id }
-          : p
-      ));
-      setEditingProduct(null);
-    } else {
-      const newId = Math.max(...products.map(p => p.id)) + 1;
-      setProducts([...products, { ...newProduct, id: newId }]);
+    try {
+      const formData = new FormData();
+      formData.append('name', newProduct.name);
+      formData.append('price', productPrice);
+      formData.append('description', newProduct.description);
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+      formData.append('quantity', newProduct.quantity.toString());
+      
+      // If editing, add id to formData
+      if (editingProduct) {
+        formData.append('id', editingProduct.id.toString());
+      }
+
+      const url = editingProduct 
+        ? 'http://localhost/mini%20main/project/src/backend/edit_product.php'
+        : 'http://localhost/mini%20main/project/src/backend/add_product.php';
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Reset form
+        setNewProduct({ name: '', price: 0, description: '', image: '', quantity: 0 });
+        setProductPrice('');
+        setSelectedImage(null);
+        setEditingProduct(null);
+        setShowAddProduct(false);
+        
+        // Immediately fetch updated products
+        await fetchProducts();
+      }
+    } catch (err) {
+      console.error('Error saving product:', err);
+      alert('Error saving product. Please try again.');
     }
-    setNewProduct({ name: '', price: 0, description: '', image: '' });
-    setShowAddProduct(false);
   };
 
-  const handleEditProduct = (product: Product) => {
+  const handleEditProduct = async (product: Product) => {
     setEditingProduct(product);
     setNewProduct({
       name: product.name,
       price: product.price,
       description: product.description,
-      image: product.image
+      image: product.image,
+      quantity: product.quantity
     });
+    setProductPrice(product.price.toString());
     setShowAddProduct(true);
   };
 
-  const handleDeleteProduct = (productId: number) => {
+  const handleDeleteProduct = async (productId: number) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      setProducts(products.filter(p => p.id !== productId));
-      setCartItems(cartItems.filter(item => item.id !== productId));
+      try {
+        const response = await fetch('http://localhost/mini%20main/project/src/backend/delete_product.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: productId })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          // Remove from local state
+          setProducts(products.filter(p => p.id !== productId));
+          setCartItems(cartItems.filter(item => item.id !== productId));
+        } else {
+          alert(data.message);
+        }
+      } catch (err) {
+        console.error('Error deleting product:', err);
+        alert('Error deleting product. Please try again.');
+      }
     }
   };
 
@@ -178,7 +260,7 @@ export default function PawMart() {
             <button
               onClick={() => {
                 setEditingProduct(null);
-                setNewProduct({ name: '', price: 0, description: '', image: '' });
+                setNewProduct({ name: '', price: 0, description: '', image: '', quantity: 0 });
                 setShowAddProduct(true);
               }}
               className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition duration-200"
@@ -219,6 +301,11 @@ export default function PawMart() {
               <div className="p-4">
                 <h3 className="text-xl font-semibold mb-2">{product.name}</h3>
                 <p className="text-gray-600 mb-4">{product.description}</p>
+                <p className="text-sm text-gray-600 mb-2">
+                  {product.quantity > 0 
+                    ? `${product.quantity} in stock` 
+                    : 'Out of stock'}
+                </p>
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-2xl font-bold text-indigo-600">{formatPrice(product.price)}</span>
                   {!isAdmin && (
@@ -311,9 +398,12 @@ export default function PawMart() {
                   </label>
                   <input
                     type="number"
-                    value={newProduct.price}
-                    onChange={(e) => setNewProduct({ ...newProduct, price: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    value={productPrice}
+                    onChange={(e) => setProductPrice(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg"
+                    placeholder="Enter product price"
+                    step="0.01"
+                    min="0"
                     required
                   />
                 </div>
@@ -331,12 +421,35 @@ export default function PawMart() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Image URL
+                    Product Image
                   </label>
                   <input
-                    type="url"
-                    value={newProduct.image}
-                    onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setSelectedImage(e.target.files[0]);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border rounded-lg"
+                    required={!editingProduct} // Only required for new products
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity in Stock
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newProduct.quantity}  // Remove the || 0
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewProduct({
+                        ...newProduct,
+                        quantity: value === '' ? 0 : parseInt(value)
+                      });
+                    }}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     required
                   />

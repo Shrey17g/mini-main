@@ -9,7 +9,6 @@ import Adopt from './pages/Adopt';
 import LostFound from './pages/LostFound';
 import PawMart from './pages/PawMart';
 import Checkout from './pages/Checkout';
-import Community from './pages/Community';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
 import AdoptionProcess from './pages/AdoptionProcess';
@@ -17,6 +16,7 @@ import LandingPage from './pages/LandingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CenterDashboard from './pages/CenterDashboard';
 import CustomerDashboard from './pages/CustomerDashboard';
+import Community from './pages/Community';
 
 function App() {
   const navigate = useNavigate();
@@ -25,19 +25,17 @@ function App() {
   const isAdmin = userType === 'admin';
 
   useEffect(() => {
-    // Allow access to landing page and login without authentication
     if (!userType && location.pathname !== '/login' && location.pathname !== '/') {
       navigate('/login');
       return;
     }
 
-    // Redirect to appropriate dashboard if logged in and on root path
     if (userType && location.pathname === '/') {
       navigate(`/${userType}Dashboard`);
       return;
     }
 
-    // Redirect admin users away from contact page
+    // Restore admin restrictions
     if (isAdmin && location.pathname === '/contact') {
       navigate(`/${userType}Dashboard`);
     }

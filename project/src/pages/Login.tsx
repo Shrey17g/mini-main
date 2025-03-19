@@ -12,6 +12,7 @@ export default function Login() {
   const [name, setName] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,6 +26,35 @@ export default function Login() {
     e.preventDefault();
     alert('If an account exists with this email, you will receive password reset instructions.');
     setShowForgotPassword(false);
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      console.log('Attempting admin login...');
+      const response = await fetch('http://localhost/mini%20main/project/src/backend/Login.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      console.log('Login response:', data);
+      
+      if (data.success) {
+        console.log('Login successful, redirecting...');
+        localStorage.setItem('adminId', data.admin_id);
+        localStorage.setItem('userType', 'admin'); // Add this line
+        navigate('/AdminDashboard', { replace: true }); // Add replace: true
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Connection error. Please try again.');
+    }
   };
 
   return (
@@ -92,7 +122,7 @@ export default function Login() {
                 )}
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={userType === 'admin' && isLogin ? handleAdminLogin : handleSubmit} className="space-y-6">
                 {!isLogin && userType !== 'admin' && (
                   <>
                     <div>
@@ -164,6 +194,8 @@ export default function Login() {
                     </button>
                   </div>
                 )}
+
+                {error && <div className="text-red-500">{error}</div>}
 
                 <button
                   type="submit"
